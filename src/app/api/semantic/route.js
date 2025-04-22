@@ -5,7 +5,7 @@ export async function POST(request) {
     const formData = await request.formData();
     
     // Forward the request to the backend
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/semantic/analyze`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/semantic/analyze/hybrid`, {
       method: 'POST',
       body: formData,
     });

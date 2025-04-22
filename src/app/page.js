@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Upload, Music, Headphones, Loader2, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
+import { Upload, Music, Headphones, Loader2, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, FileAudio, Waveform, BarChart3, Tag, MusicIcon, Layers, ZapIcon } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 export default function SemanticAnalyzer() {
@@ -162,6 +163,38 @@ export default function SemanticAnalyzer() {
       setLoading(false);
       setLoadingProgress(100); // Set to 100% when done
     }
+  };
+
+  // Function to render the energy distribution as a horizontal stacked bar
+  const renderEnergyBar = (energyData) => {
+    if (!energyData) return null;
+    
+    const total = Object.values(energyData).reduce((sum, val) => sum + val, 0);
+    const colorMap = {
+      vocals: "bg-blue-500",
+      drums: "bg-purple-500",
+      bass: "bg-orange-500",
+      other: "bg-green-500"
+    };
+    
+    return (
+      <div className="w-full h-8 flex rounded-md overflow-hidden">
+        {Object.entries(energyData).map(([key, value]) => {
+          const percentage = (value / total) * 100;
+          return (
+            <div 
+              key={key} 
+              className={`${colorMap[key]} relative group`}
+              style={{ width: `${percentage}%` }}
+            >
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 text-white text-xs font-medium">
+                {key}: {Math.round(percentage)}%
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -320,118 +353,182 @@ export default function SemanticAnalyzer() {
         )}
 
         {result && (
-          <Card className="shadow-2xl border border-primary/10 overflow-hidden backdrop-blur-sm bg-background/80">
-            <CardHeader className="border-b border-border/40 pb-4">
-              <div className="flex items-center gap-2">
-                <Music className="h-5 w-5 text-primary" />
-                <CardTitle className="text-xl">Track Analysis Results</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-8 p-6">
-              <section>
-                <h3 className="text-lg font-semibold flex items-center gap-2 mb-3">
-                  <span className="text-primary">🎧</span> Summary
-                </h3>
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-foreground leading-relaxed text-base">
-                    {result.summary}
-                  </p>
+          <div className="space-y-6">
+            {/* Overview Card */}
+            <Card className="shadow-2xl border border-primary/10 overflow-hidden backdrop-blur-sm bg-background/80">
+              <CardHeader className="border-b border-border/40 pb-4">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-xl">Track Analysis Overview</CardTitle>
                 </div>
-              </section>
-
-              <section>
-                <h3 className="text-lg font-semibold flex items-center gap-2 mb-3">
-                  <span className="text-primary">🏷️</span> Tags
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {result.tags.map((tag, i) => (
-                    <Badge
-                      key={i}
-                      variant="secondary"
-                      className="px-3 py-1 text-sm hover:bg-primary hover:text-white cursor-pointer transition-colors duration-200"
-                      onClick={() => navigator.clipboard.writeText(tag)}
-                    >
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-lg font-semibold flex items-center gap-2 mb-3">
-                  <span className="text-primary">📊</span> Metadata
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-muted/30 p-4 rounded-lg text-center">
-                    <div className="text-sm text-muted-foreground mb-1">Track Type</div>
-                    <div className="text-lg font-semibold">{result.metadata.track_type}</div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-6">
+                  {/* Top Summary Section */}
+                  <div className="bg-muted/50 p-4 rounded-lg">
+                    <p className="text-foreground leading-relaxed text-base">
+                      {result.summary}
+                    </p>
                   </div>
-                  <div className="bg-muted/30 p-4 rounded-lg text-center">
-                    <div className="text-sm text-muted-foreground mb-1">Duration</div>
-                    <div className="text-lg font-semibold">{result.metadata.duration_sec.toFixed(1)} sec</div>
-                  </div>
-                  <div className="bg-muted/30 p-4 rounded-lg text-center">
-                    <div className="text-sm text-muted-foreground mb-1">Tempo</div>
-                    <div className="text-lg font-semibold">{result.metadata.tempo_bpm.toFixed(2)} BPM</div>
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-lg font-semibold flex items-center gap-2 mb-3">
-                  <span className="text-primary">🔊</span> Per-Stem Characteristics
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {Object.entries(result.stem_tags).map(([stem, tags]) => (
-                    <div key={stem} className="bg-muted/30 p-4 rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
-                      <h4 className="capitalize text-md font-semibold mb-2 text-primary">
-                        {stem}
-                      </h4>
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {tags.map((tag, idx) => (
-                          <span key={idx} className="text-xs bg-secondary/50 px-2 py-1 rounded-full text-muted-foreground">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                      <p className="text-sm text-foreground">
-                        {result.stem_summaries[stem]}
-                      </p>
+                  
+                  {/* Key Metrics Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-muted/30 p-4 rounded-lg text-center flex flex-col items-center">
+                      <FileAudio className="h-5 w-5 text-primary mb-2" />
+                      <div className="text-sm text-muted-foreground">Track Type</div>
+                      <div className="text-lg font-semibold capitalize">{result.metadata.track_info.track_type}</div>
                     </div>
-                  ))}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-lg font-semibold flex items-center gap-2 mb-3">
-                  <span className="text-primary">🎯</span> You Might Also Like
-                </h3>
-                <div className="space-y-4">
-                  {result.neighbors.map((track, i) => (
-                    <div key={i} className="border-l-4 pl-4 border-primary bg-muted/30 p-4 rounded-r-lg hover:bg-muted/50 transition-all">
-                      <p className="text-md font-semibold">
-                        {track.title} <span className="text-muted-foreground">by</span> {track.artist}
-                      </p>
-                      <p className="text-sm italic text-muted-foreground">{track.genre_names?.join(", ")} — {track.location}</p>
-                      <p className="text-xs mt-2 text-muted-foreground line-clamp-3">
-                        {track.artist_bio || "No bio available."}
-                      </p>
-                      {track.artist_website && (
-                        <a
-                          href={track.artist_website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-2 inline-block text-xs text-primary underline hover:text-primary/80"
+                    <div className="bg-muted/30 p-4 rounded-lg text-center flex flex-col items-center">
+                      <ZapIcon className="h-5 w-5 text-primary mb-2" />
+                      <div className="text-sm text-muted-foreground">Tempo</div>
+                      <div className="text-lg font-semibold">{result.metadata.tempo_bpm.toFixed(2)} BPM</div>
+                    </div>
+                    <div className="bg-muted/30 p-4 rounded-lg text-center flex flex-col items-center">
+                      <Tag className="h-5 w-5 text-primary mb-2" />
+                      <div className="text-sm text-muted-foreground">Duration</div>
+                      <div className="text-lg font-semibold">{formatTime(result.metadata.duration_sec)}</div>
+                    </div>
+                    <div className="bg-muted/30 p-4 rounded-lg text-center flex flex-col items-center">
+                      <Layers className="h-5 w-5 text-primary mb-2" />
+                      <div className="text-sm text-muted-foreground">Vocal Ratio</div>
+                      <div className="text-lg font-semibold">{(result.metadata.track_info.vocal_ratio * 100).toFixed(1)}%</div>
+                    </div>
+                  </div>
+                  
+                  {/* Energy Distribution */}
+                  <div className="space-y-2">
+                    <h3 className="text-md font-semibold flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-primary" /> Energy Distribution
+                    </h3>
+                    {renderEnergyBar(result.metadata.track_info.energy)}
+                    <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                      <div className="flex items-center"><span className="w-3 h-3 bg-blue-500 inline-block mr-1 rounded-sm"></span> Vocals</div>
+                      <div className="flex items-center"><span className="w-3 h-3 bg-purple-500 inline-block mr-1 rounded-sm"></span> Drums</div>
+                      <div className="flex items-center"><span className="w-3 h-3 bg-orange-500 inline-block mr-1 rounded-sm"></span> Bass</div>
+                      <div className="flex items-center"><span className="w-3 h-3 bg-green-500 inline-block mr-1 rounded-sm"></span> Other</div>
+                    </div>
+                  </div>
+                  
+                  {/* Tags */}
+                  <div>
+                    <h3 className="text-md font-semibold flex items-center gap-2 mb-3">
+                      <Tag className="h-4 w-4 text-primary" /> Track Tags
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {result.tags.map((tag, i) => (
+                        <Badge
+                          key={i}
+                          variant="secondary"
+                          className="px-3 py-1 text-sm hover:bg-primary hover:text-white cursor-pointer transition-colors duration-200"
+                          onClick={() => navigator.clipboard.writeText(tag)}
                         >
-                          Visit Artist Website
-                        </a>
-                      )}
+                          {tag}
+                        </Badge>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              </section>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            
+            {/* Stem Analysis Card */}
+            <Card className="shadow-2xl border border-primary/10 overflow-hidden backdrop-blur-sm bg-background/80">
+              <CardHeader className="border-b border-border/40 pb-4">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl">Sound Component Analysis</CardTitle>
+                </div>
+                <CardDescription>
+                  Detailed breakdown of each audio component in your track
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
+                <Tabs defaultValue="vocals" className="w-full">
+                  <TabsList className="grid grid-cols-4 mb-6">
+                    <TabsTrigger value="vocals">Vocals</TabsTrigger>
+                    <TabsTrigger value="drums">Drums</TabsTrigger>
+                    <TabsTrigger value="bass">Bass</TabsTrigger>
+                    <TabsTrigger value="other">Other</TabsTrigger>
+                  </TabsList>
+                  
+                  {Object.entries(result.stem_summaries).map(([stem, summary]) => (
+                    <TabsContent key={stem} value={stem} className="space-y-4">
+                      <div className="bg-muted/30 p-4 rounded-lg">
+                        <p className="text-foreground text-sm">{summary}</p>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Identified Characteristics:</h4>
+                        <div className="flex flex-wrap gap-1.5">
+                          {result.stem_tags[stem].map((tag, idx) => (
+                            <span 
+                              key={idx} 
+                              className="text-xs bg-secondary/50 px-2 py-1 rounded-full text-muted-foreground"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              </CardContent>
+            </Card>
+            
+            {/* Similar Artists & Tracks */}
+            <Card className="shadow-2xl border border-primary/10 overflow-hidden backdrop-blur-sm bg-background/80">
+              <CardHeader className="border-b border-border/40 pb-4">
+                <div className="flex items-center gap-2">
+                  <MusicIcon className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl">Similar Music</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-6">
+                  {/* Similar Artists */}
+                  <section>
+                    <h3 className="text-md font-semibold mb-3">Similar Artists</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {result.similar_artists && result.similar_artists.map((artist, i) => (
+                        <div key={i} className="bg-muted/30 p-4 rounded-lg">
+                          <p className="text-md font-semibold">{artist.artist_name}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {artist.track_ids.length} tracks in database
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  
+                  {/* Similar Tracks */}
+                  <section>
+                    <h3 className="text-md font-semibold mb-3">You Might Also Like</h3>
+                    <div className="space-y-3">
+                      {result.clap_neighbors && result.clap_neighbors.map((track, i) => (
+                        <div key={i} className="border-l-4 pl-4 border-primary bg-muted/30 p-4 rounded-r-lg">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-md font-semibold">
+                                {track.title} <span className="text-muted-foreground">by</span> {track.artist}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {track.genre_names?.join(", ")} • {formatTime(track.duration)}
+                              </p>
+                            </div>
+                            {track.license && (
+                              <Badge variant="outline" className="text-xs">
+                                {track.license}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
       </div>
     </div>
