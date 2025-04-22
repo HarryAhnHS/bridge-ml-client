@@ -32,6 +32,26 @@ export default function SemanticAnalyzer() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const audioRef = useRef(null);
   const progressInterval = useRef(null);
+  
+  // Stem players state
+  const [stemAudioUrls, setStemAudioUrls] = useState({
+    vocals: null,
+    drums: null,
+    bass: null,
+    other: null
+  });
+  const [stemPlaybackState, setStemPlaybackState] = useState({
+    vocals: { isPlaying: false, currentTime: 0, duration: 0 },
+    drums: { isPlaying: false, currentTime: 0, duration: 0 },
+    bass: { isPlaying: false, currentTime: 0, duration: 0 },
+    other: { isPlaying: false, currentTime: 0, duration: 0 }
+  });
+  const stemAudioRefs = {
+    vocals: useRef(null),
+    drums: useRef(null),
+    bass: useRef(null),
+    other: useRef(null)
+  };
 
   // Cleanup audio URL when component unmounts or when file changes
   useEffect(() => {
@@ -42,12 +62,67 @@ export default function SemanticAnalyzer() {
     }
   }, [file]);
 
+  // Process encoded stems when result is updated
+  useEffect(() => {
+    console.log(result);
+    if (result?.stems) {
+      const urls = {};
+      
+      // Base64 to Blob conversion function
+      const base64ToBlob = (base64, mime = "audio/wav") => {
+        // Check if we have a data URL format and extract just the base64 part if so
+        const base64Data = base64.split(',')[1] || base64;
+        
+        // Decode base64
+        const byteString = atob(base64Data);
+        const arrayBuffer = new ArrayBuffer(byteString.length);
+        const intArray = new Uint8Array(arrayBuffer);
+        
+        for (let i = 0; i < byteString.length; i++) {
+          intArray[i] = byteString.charCodeAt(i);
+        }
+        
+        return new Blob([intArray], { type: mime });
+      };
+      
+      // Create audio URLs from base64 data
+      Object.entries(result.stems).forEach(([stem, base64Data]) => {
+        if (base64Data) {
+          try {
+            const blob = base64ToBlob(base64Data);
+            urls[stem] = URL.createObjectURL(blob);
+            console.log(`Created URL for ${stem} stem`);
+          } catch (err) {
+            console.error(`Error processing ${stem} stem:`, err);
+          }
+        }
+      });
+      
+      setStemAudioUrls(urls);
+      
+      // Return cleanup function
+      return () => {
+        Object.values(urls).forEach(url => {
+          if (url) URL.revokeObjectURL(url);
+        });
+      };
+    }
+  }, [result]);
+
   // Audio player controls
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume;
       audioRef.current.muted = isMuted;
     }
+    
+    // Apply volume to all stem players
+    Object.keys(stemAudioRefs).forEach(stem => {
+      if (stemAudioRefs[stem].current) {
+        stemAudioRefs[stem].current.volume = volume;
+        stemAudioRefs[stem].current.muted = isMuted;
+      }
+    });
   }, [volume, isMuted]);
 
   useEffect(() => {
@@ -128,6 +203,18 @@ export default function SemanticAnalyzer() {
       setError(null);
       // Reset analysis results when new file is uploaded
       setResult(null);
+      setStemAudioUrls({
+        vocals: null,
+        drums: null,
+        bass: null,
+        other: null
+      });
+      setStemPlaybackState({
+        vocals: { isPlaying: false, currentTime: 0, duration: 0 },
+        drums: { isPlaying: false, currentTime: 0, duration: 0 },
+        bass: { isPlaying: false, currentTime: 0, duration: 0 },
+        other: { isPlaying: false, currentTime: 0, duration: 0 }
+      });
     }
   };
 
@@ -195,6 +282,152 @@ export default function SemanticAnalyzer() {
         })}
       </div>
     );
+  };
+
+  // Function to render audio player for a stem
+  const renderStemPlayer = (stem) => {
+    const audioUrl = stemAudioUrls[stem];
+    const { isPlaying, currentTime, duration } = stemPlaybackState[stem];
+    
+    if (!audioUrl) return (
+      <div className="bg-muted/10 p-4 rounded-lg text-center text-muted-foreground text-sm">
+        No audio available for this stem
+      </div>
+    );
+    
+    return (
+      <div className="bg-muted/30 rounded-lg p-4 border border-border/50 mt-4">
+        <div className="flex items-center gap-3 mb-2">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-9 w-9 rounded-full"
+            onClick={() => handleStemPlayPause(stem)}
+          >
+            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </Button>
+          <div className="flex-1">
+            <div className="flex justify-between text-xs text-muted-foreground mb-1">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+            <Slider 
+              value={[currentTime]} 
+              max={duration || 100}
+              step={0.1}
+              onValueChange={(value) => handleStemSeek(stem, value)}
+              className="cursor-pointer"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={toggleMute}
+            >
+              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </Button>
+            <Slider
+              value={[isMuted ? 0 : volume]}
+              max={1}
+              step={0.01}
+              onValueChange={handleVolume}
+              className="w-20 cursor-pointer"
+            />
+          </div>
+        </div>
+        
+        {/* Basic controls as fallback */}
+        <div className="mt-2 text-center">
+          <audio
+            ref={stemAudioRefs[stem]}
+            src={audioUrl}
+            onTimeUpdate={() => handleStemTimeUpdate(stem)}
+            onLoadedMetadata={() => handleStemLoadedMetadata(stem)}
+            onEnded={() => {
+              setStemPlaybackState(prev => ({
+                ...prev,
+                [stem]: { ...prev[stem], isPlaying: false }
+              }));
+            }}
+            controls
+            className="w-full h-8 hidden"
+          />
+          <div className="text-xs text-muted-foreground mt-1">
+            {isPlaying ? "Playing" : "Paused"} | {formatTime(currentTime)} / {formatTime(duration)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Stem player handlers
+  const handleStemTimeUpdate = (stem) => {
+    if (stemAudioRefs[stem].current) {
+      setStemPlaybackState(prev => ({
+        ...prev,
+        [stem]: {
+          ...prev[stem],
+          currentTime: stemAudioRefs[stem].current.currentTime
+        }
+      }));
+    }
+  };
+
+  const handleStemLoadedMetadata = (stem) => {
+    if (stemAudioRefs[stem].current) {
+      setStemPlaybackState(prev => ({
+        ...prev,
+        [stem]: {
+          ...prev[stem],
+          duration: stemAudioRefs[stem].current.duration
+        }
+      }));
+    }
+  };
+
+  const handleStemPlayPause = (stem) => {
+    // Pause all other stems first
+    Object.keys(stemAudioRefs).forEach(s => {
+      if (s !== stem && stemAudioRefs[s].current && stemPlaybackState[s].isPlaying) {
+        stemAudioRefs[s].current.pause();
+        setStemPlaybackState(prev => ({
+          ...prev,
+          [s]: { ...prev[s], isPlaying: false }
+        }));
+      }
+    });
+
+    // Handle the selected stem
+    if (stemAudioRefs[stem].current) {
+      if (stemPlaybackState[stem].isPlaying) {
+        stemAudioRefs[stem].current.pause();
+      } else {
+        stemAudioRefs[stem].current.play();
+      }
+      
+      setStemPlaybackState(prev => ({
+        ...prev,
+        [stem]: { 
+          ...prev[stem], 
+          isPlaying: !prev[stem].isPlaying 
+        }
+      }));
+    }
+  };
+
+  const handleStemSeek = (stem, value) => {
+    if (stemAudioRefs[stem].current) {
+      stemAudioRefs[stem].current.currentTime = value[0];
+      setStemPlaybackState(prev => ({
+        ...prev,
+        [stem]: { 
+          ...prev[stem], 
+          currentTime: value[0] 
+        }
+      }));
+    }
   };
 
   return (
@@ -452,7 +685,11 @@ export default function SemanticAnalyzer() {
                   
                   {Object.entries(result.stem_summaries).map(([stem, summary]) => (
                     <TabsContent key={stem} value={stem} className="space-y-4">
+                      {/* Stem Player */}
+                      {renderStemPlayer(stem)}
+
                       <div className="bg-muted/30 p-4 rounded-lg">
+                        <h4 className="text-sm font-medium mb-2">Analysis</h4>
                         <p className="text-foreground text-sm">{summary}</p>
                       </div>
                       
